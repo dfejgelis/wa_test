@@ -8,19 +8,33 @@
 import "dotenv/config";
 import express from "express";
 import { getDarmaResponse } from "./lib/ai.js";
-import { sendReply, markAsRead } from "./lib/wa.js";
+import { sendMessage, markAsRead } from "./lib/wa.js";
 
 const app = express();
 app.use(express.json());
 
 const { WEBHOOK_VERIFY_TOKEN, PORT } = process.env;
 
-app.post("/test", async (req, res) => {
+app.post("/ai", async (req, res) => {
   console.log("Incoming test message:", JSON.stringify(req.body, null, 2));
   const message = req.body.text;
 
   const response = await getDarmaResponse(message);
   res.send(response);
+});
+
+app.post("/message", async (req, res) => {
+  console.log("Incoming test message:", JSON.stringify(req.body, null, 2));
+  const { phone, text: message, business_phone_number_id } = req.body;
+
+  await sendMessage(
+    {
+      from: phone,
+    },
+    message,
+    business_phone_number_id
+  );
+  res.sendStatus(200);
 });
 
 app.post("/webhook", async (req, res) => {
@@ -33,7 +47,7 @@ app.post("/webhook", async (req, res) => {
     const business_phone_number_id =
       req.body.entry?.[0].changes?.[0].value?.metadata?.phone_number_id;
 
-    await sendReply(
+    await sendMessage(
       message,
       await getDarmaResponse(message.text.body),
       business_phone_number_id
