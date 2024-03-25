@@ -30,6 +30,9 @@ app.post("/webhook", async (req, res) => {
     const business_phone_number_id =
       req.body.entry?.[0].changes?.[0].value?.metadata?.phone_number_id;
 
+    let from = message.from;
+    if (from === "5491138300348") from = "54111538300348";
+
     // send a reply message as per the docs here https://developers.facebook.com/docs/whatsapp/cloud-api/reference/messages
     await axios({
       method: "POST",
@@ -39,7 +42,7 @@ app.post("/webhook", async (req, res) => {
       },
       data: {
         messaging_product: "whatsapp",
-        to: message.from,
+        to: from,
         text: { body: "Echo: " + message.text.body },
         context: {
           message_id: message.id, // shows the message as a reply to the original user message
