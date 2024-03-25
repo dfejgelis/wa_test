@@ -7,62 +7,38 @@
 
 import "dotenv/config";
 import express from "express";
-import axios from "axios";
+import { getDarmaResponse } from "./lib/ai.js";
+import { sendReply, markAsRead } from "./lib/wa.js";
 
 const app = express();
 app.use(express.json());
 
-console.log(process.env);
+const { WEBHOOK_VERIFY_TOKEN, PORT } = process.env;
 
-const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT } = process.env;
+app.post("/test", async (req, res) => {
+  console.log("Incoming test message:", JSON.stringify(req.body, null, 2));
+  const message = req.body.text;
+
+  const response = await getDarmaResponse(message);
+  res.send(response);
+});
 
 app.post("/webhook", async (req, res) => {
-  // log incoming messages
   console.log("Incoming webhook message:", JSON.stringify(req.body, null, 2));
 
-  // check if the webhook request contains a message
   // details on WhatsApp text message payload: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks/payload-examples#text-messages
   const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
 
-  // check if the incoming message contains text
   if (message?.type === "text") {
-    // extract the business number to send the reply from it
     const business_phone_number_id =
       req.body.entry?.[0].changes?.[0].value?.metadata?.phone_number_id;
 
-    let from = message.from;
-    if (from === "5491138300348") from = "54111538300348";
-
-    // send a reply message as per the docs here https://developers.facebook.com/docs/whatsapp/cloud-api/reference/messages
-    await axios({
-      method: "POST",
-      url: `https://graph.facebook.com/v19.0/${business_phone_number_id}/messages`,
-      headers: {
-        Authorization: `Bearer ${GRAPH_API_TOKEN}`,
-      },
-      data: {
-        messaging_product: "whatsapp",
-        to: from,
-        text: { body: "Echo: " + message.text.body },
-        context: {
-          message_id: message.id, // shows the message as a reply to the original user message
-        },
-      },
-    });
-
-    // mark incoming message as read
-    await axios({
-      method: "POST",
-      url: `https://graph.facebook.com/v19.0/${business_phone_number_id}/messages`,
-      headers: {
-        Authorization: `Bearer ${GRAPH_API_TOKEN}`,
-      },
-      data: {
-        messaging_product: "whatsapp",
-        status: "read",
-        message_id: message.id,
-      },
-    });
+    await sendReply(
+      message,
+      await getDarmaResponse(message.text.body),
+      business_phone_number_id
+    );
+    await markAsRead(message, business_phone_number_id);
   }
 
   res.sendStatus(200);
@@ -84,11 +60,6 @@ app.get("/webhook", (req, res) => {
     // respond with '403 Forbidden' if verify tokens do not match
     res.sendStatus(403);
   }
-});
-
-app.get("/", (req, res) => {
-  res.send(`<pre>Nothing to see here.
-Checkout README.md to start.</pre>`);
 });
 
 app.listen(PORT, () => {
